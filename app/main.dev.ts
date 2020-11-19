@@ -11,7 +11,7 @@
 import 'core-js/stable';
 import 'regenerator-runtime/runtime';
 import path from 'path';
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow,Menu,Tray } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import MenuBuilder from './menu';
@@ -24,7 +24,10 @@ export default class AppUpdater {
   }
 }
 
+//主线程
 let mainWindow: BrowserWindow | null = null;
+//托盘图标
+let tray: Tray | null = null;
 
 if (process.env.NODE_ENV === 'production') {
   const sourceMapSupport = require('source-map-support');
@@ -59,13 +62,13 @@ const createWindow = async () => {
     await installExtensions();
   }
 
-  const RESOURCES_PATH = app.isPackaged
-    ? path.join(process.resourcesPath, 'resources')
-    : path.join(__dirname, '../resources');
+  // const RESOURCES_PATH = app.isPackaged
+  //   ? path.join(process.resourcesPath, 'resources')
+  //   : path.join(__dirname, '../resources');
 
-  const getAssetPath = (...paths: string[]): string => {
-    return path.join(RESOURCES_PATH, ...paths);
-  };
+  // const getAssetPath = (...paths: string[]): string => {
+  //   return path.join(RESOURCES_PATH, ...paths);
+  // };
 
   mainWindow = new BrowserWindow({
     show: false,
@@ -112,6 +115,49 @@ const createWindow = async () => {
   new AppUpdater();
 };
 
+const createTray=() =>{
+
+  //TODO: 需要将win与mac ico分别设置
+  const icoPath =  getAssetPath('icon.png');
+  const pic =  process.platform==="darwin" ? icoPath:icoPath;
+  tray = new Tray(pic);
+
+
+  var contextMenu = Menu.buildFromTemplate([
+    {label:'声音提示',type:'checkbox',click:()=>{
+      console.log('开启声音提示');
+    }},
+    {type:'separator'},
+    {label:'退出',click:()=>{app.quit()}}
+  ]) ;
+  tray.setContextMenu(contextMenu);
+  tray.setToolTip('测试气泡提示文字');
+
+  tray.on('right-click',()=>{
+    console.log('左键点击事件');
+    tray?.popUpContextMenu(contextMenu);
+  });
+
+  tray.on('click',()=>{
+    console.log('左键点击事件');
+    if(mainWindow===null)    {
+     createWindow();
+    }
+    else{
+      mainWindow.show();
+    }
+
+  });
+};
+
+const getAssetPath = (...paths: string[]): string => {
+  const RESOURCES_PATH = app.isPackaged
+  ? path.join(process.resourcesPath, 'resources')
+  : path.join(__dirname, '../resources');
+
+  return path.join(RESOURCES_PATH, ...paths);
+};
+
 /**
  * Add event listeners...
  */
@@ -126,13 +172,15 @@ app.on('window-all-closed', () => {
 
 if (process.env.E2E_BUILD === 'true') {
   // eslint-disable-next-line promise/catch-or-return
-  app.whenReady().then(createWindow);
+  app.whenReady().then(createWindow).then(createTray);
 } else {
   app.on('ready', createWindow);
+  app.on('ready',createTray);
 }
 
 app.on('activate', () => {
   // On macOS it's common to re-create a window in the app when the
   // dock icon is clicked and there are no other windows open.
   if (mainWindow === null) createWindow();
+  if (tray === null) createTray();
 });
